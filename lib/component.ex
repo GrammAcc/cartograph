@@ -177,6 +177,8 @@ defmodule Cartograph.Component do
 
   alias Phoenix.LiveView.JS
 
+  # TODO: Refactor the query parsing functions to reduce the cognitive complexity.
+
   @doc """
   Push a live patch event to the server with the href computed by relative query parsing.
 
@@ -200,19 +202,12 @@ defmodule Cartograph.Component do
   def cartograph_patch(opts) do
     query_opts = Keyword.get(opts, :query, [])
 
-    parsed_opts =
-      query_opts
-      |> parse_query_opts()
-      |> serialize_query_opts()
-
-    push_value = %{"query_opts" => parsed_opts}
+    push_value = %{"query_opts" => parse_query_opts(query_opts)}
 
     phx_opts = filter_phoenix_push_opts(opts)
     push_opts = Keyword.put(phx_opts, :value, push_value)
 
     JS.push("cartograph_patch", push_opts)
-    # JS.push("cartograph_patch", page_loading: true)
-    # JS.push("cartograph_patch", value: push_value)
   end
 
   @doc """
@@ -242,12 +237,7 @@ defmodule Cartograph.Component do
   def cartograph_navigate(uri, opts) when is_binary(uri) do
     query_opts = Keyword.get(opts, :query, [])
 
-    parsed_opts =
-      query_opts
-      |> parse_query_opts()
-      |> serialize_query_opts()
-
-    push_value = %{"uri" => uri, "query_opts" => parsed_opts}
+    push_value = %{"uri" => uri, "query_opts" => parse_query_opts(query_opts)}
 
     phx_opts = filter_phoenix_push_opts(opts)
     push_opts = Keyword.put(phx_opts, :value, push_value)
@@ -262,34 +252,6 @@ defmodule Cartograph.Component do
 
   defp filter_phoenix_push_opts(opts) do
     Keyword.filter(opts, &(elem(&1, 0) in [:loading, :page_loading]))
-  end
-
-  defp serialize_query_opts(parsed_opts) do
-    Enum.map(parsed_opts, fn
-      [:remove, %{} = comp] ->
-        [
-          :remove,
-          Map.new(comp, fn
-            [k, v] -> {k, v}
-            {k, v} -> {k, v}
-          end),
-        ]
-
-      [:remove, [_ | _] = comp] ->
-        [:remove, comp]
-
-      [:remove, [] = comp] ->
-        [:remove, comp]
-
-      [op, comp] ->
-        [
-          op,
-          Map.new(comp, fn
-            [k, v] -> {k, v}
-            {k, v} -> {k, v}
-          end),
-        ]
-    end)
   end
 
   @doc """
@@ -312,7 +274,7 @@ defmodule Cartograph.Component do
   def parse_patch(uri, opts \\ [])
 
   def parse_patch(uri, opts) when is_binary(uri) do
-    parse_patch(URI.new!(uri), opts)
+    parse_patch(URI.parse(uri), opts)
   end
 
   def parse_patch(%URI{} = uri, opts) do
@@ -350,7 +312,7 @@ defmodule Cartograph.Component do
   def parse_navigate(uri, opts \\ [])
 
   def parse_navigate(uri, opts) when is_binary(uri) do
-    parse_navigate(URI.new!(uri), opts)
+    parse_navigate(URI.parse(uri), opts)
   end
 
   def parse_navigate(%URI{} = uri, opts) do
@@ -425,34 +387,34 @@ defmodule Cartograph.Component do
     Enum.reduce(instructions, query_items, &process_remove_instruction/2)
   end
 
-  defp process_add_instruction([k, v], query_items) when is_list(v) and is_list(query_items) do
-    Enum.reduce(v, query_items, &process_add_instruction([k, &1], &2))
+  defp process_add_instruction({k, v}, query_items) when is_list(v) and is_list(query_items) do
+    Enum.reduce(v, query_items, &process_add_instruction({k, &1}, &2))
   end
 
-  defp process_add_instruction([k, v], query_items) when is_binary(v) and is_list(query_items) do
-    [[k, v] | query_items]
+  defp process_add_instruction({k, v}, query_items) when is_binary(v) and is_list(query_items) do
+    [{k, v} | query_items]
   end
 
-  defp process_toggle_instruction([k, v], query_items) when is_list(v) and is_list(query_items) do
-    Enum.reduce(v, query_items, &process_toggle_instruction([k, &1], &2))
+  defp process_toggle_instruction({k, v}, query_items) when is_list(v) and is_list(query_items) do
+    Enum.reduce(v, query_items, &process_toggle_instruction({k, &1}, &2))
   end
 
-  defp process_toggle_instruction([k, v], query_items) when is_binary(v) and is_list(query_items) do
-    if Enum.member?(query_items, [k, v]) do
-      Enum.filter(query_items, &(&1 != [k, v]))
+  defp process_toggle_instruction({k, v}, query_items) when is_binary(v) and is_list(query_items) do
+    if Enum.member?(query_items, {k, v}) do
+      Enum.filter(query_items, &(&1 != {k, v}))
     else
-      [[k, v] | query_items]
+      [{k, v} | query_items]
     end
   end
 
-  defp process_set_instruction([k, v], query_items) when is_list(v) and is_list(query_items) do
+  defp process_set_instruction({k, v}, query_items) when is_list(v) and is_list(query_items) do
     filtered = filter_query_key(query_items, k)
-    Enum.reduce(v, filtered, &[[k, &1] | &2])
+    Enum.reduce(v, filtered, &[{k, &1} | &2])
   end
 
-  defp process_set_instruction([k, v], query_items) when is_binary(v) and is_list(query_items) do
+  defp process_set_instruction({k, v}, query_items) when is_binary(v) and is_list(query_items) do
     filtered = filter_query_key(query_items, k)
-    [[k, v] | filtered]
+    [{k, v} | filtered]
   end
 
   defp merge_replace(replace_map, query_value) do
@@ -462,31 +424,28 @@ defmodule Cartograph.Component do
     end
   end
 
-  defp process_merge_instruction([k, v], query_items) when is_map(v) and is_list(query_items) do
-    query_items
-    |> Enum.map(fn
-      {^k = qk, qv} -> [qk, merge_replace(v, qv)]
-      {qk, qv} -> [qk, qv]
-      [^k = qk, qv] -> [qk, merge_replace(v, qv)]
-      [qk, qv] -> [qk, qv]
+  defp process_merge_instruction({k, v}, query_items) when is_map(v) and is_list(query_items) do
+    Enum.map(query_items, fn
+      {^k = qk, qv} -> {qk, merge_replace(v, qv)}
+      {qk, qv} -> {qk, qv}
     end)
   end
 
-  defp process_merge_instruction([k, v], query_items) when is_list(v) and is_list(query_items) do
+  defp process_merge_instruction({k, v}, query_items) when is_list(v) and is_list(query_items) do
     filtered = filter_query_key(query_items, k)
-    Enum.reduce(v, filtered, &[[k, &1] | &2])
+    Enum.reduce(v, filtered, &[{k, &1} | &2])
   end
 
-  defp process_merge_instruction([k, v], query_items) when is_binary(v) and is_list(query_items) do
+  defp process_merge_instruction({k, v}, query_items) when is_binary(v) and is_list(query_items) do
     filtered = filter_query_key(query_items, k)
-    [[k, v] | filtered]
+    [{k, v} | filtered]
   end
 
-  defp process_remove_instruction([k, v], query_items) when is_list(v) and is_list(query_items) do
+  defp process_remove_instruction({k, v}, query_items) when is_list(v) and is_list(query_items) do
     Enum.reduce(v, query_items, &filter_query_key_value(&2, k, &1))
   end
 
-  defp process_remove_instruction([k, v], query_items) when is_binary(v) and is_list(query_items) do
+  defp process_remove_instruction({k, v}, query_items) when is_binary(v) and is_list(query_items) do
     filter_query_key_value(query_items, k, v)
   end
 
@@ -495,17 +454,11 @@ defmodule Cartograph.Component do
   end
 
   defp filter_query_key(query_items, k) when is_list(query_items) do
-    Enum.filter(query_items, fn
-      [qk, _qv] -> qk != k
-      {qk, _qv} -> qk != k
-    end)
+    Enum.filter(query_items, fn {qk, _qv} -> qk != k end)
   end
 
   defp filter_query_key_value(query_items, k, v) when is_list(query_items) do
-    Enum.filter(query_items, fn
-      [qk, qv] -> qk != k or qv != v
-      {qk, qv} -> qk != k or qv != v
-    end)
+    Enum.filter(query_items, fn {qk, qv} -> qk != k or qv != v end)
   end
 
   defp parse_query_component(:remove = op, comp) when is_list(comp) do
@@ -517,13 +470,8 @@ defmodule Cartograph.Component do
 
   defp parse_query_component(op, comp) when is_map(comp) do
     comp
-    |> Map.to_list()
-    |> Enum.map(fn
-      {k, v} -> parse_query_key_value(op, [k, v])
-      [k, v] -> parse_query_key_value(op, [k, v])
-      k when op == :remove -> parse_query_key(op, k)
-      _ -> bad_query_option_value(op, comp)
-    end)
+    |> Enum.map(&parse_query_key_value(op, &1))
+    |> Map.new()
   end
 
   defp parse_query_component(op, comp), do: bad_query_option_value(op, comp)
@@ -537,7 +485,7 @@ defmodule Cartograph.Component do
   end
 
   defp parse_query_key(:remove, k) when is_list(k) do
-    raise ArgumentError, ":remove list elements must be key-value pairs or keys, got: #{inspect(k)}"
+    raise ArgumentError, ":remove list elements must be string or atom keys, got: #{inspect(k)}"
   end
 
   defp parse_query_key(:remove, k), do: encode_value(k)
@@ -546,21 +494,20 @@ defmodule Cartograph.Component do
     raise ArgumentError, "#{inspect(op)} must be a map, got: #{inspect(k)}"
   end
 
-  defp parse_query_key_value(:merge = _op, [k, v]) when is_map(v) do
+  defp parse_query_key_value(:merge = _op, {k, v}) when is_map(v) do
     mapped_value =
       v
-      |> Map.to_list()
       |> Enum.map(fn {mk, mv} -> {encode_value(mk), encode_value(mv)} end)
       |> Map.new()
 
-    [encode_value(k), mapped_value]
+    {encode_value(k), mapped_value}
   end
 
-  defp parse_query_key_value(_op, [k, v]) when is_list(v) do
-    [encode_value(k), Enum.map(v, &encode_value/1)]
+  defp parse_query_key_value(_op, {k, v}) when is_list(v) do
+    {encode_value(k), Enum.map(v, &encode_value/1)}
   end
 
-  defp parse_query_key_value(_op, [k, v]), do: [encode_value(k), encode_value(v)]
+  defp parse_query_key_value(_op, {k, v}), do: {encode_value(k), encode_value(v)}
 
   defp parse_query_key_value(op, k) do
     raise ArgumentError, "#{inspect(op)} - bad query option value #{inspect(k)}"
@@ -577,7 +524,6 @@ defmodule Cartograph.Component do
     query
     |> URI.query_decoder(:rfc3986)
     |> Enum.to_list()
-    |> Enum.map(&Tuple.to_list(&1))
     |> Enum.reverse()
   end
 
