@@ -1,0 +1,17 @@
+[tools]
+elixir = "1.19"
+erlang = "28"
+
+[tasks."test:otp28"]
+description = "Run tests against elixir/otp 1.19/otp28"
+run = "mix test"
+env.MIX_ENV = "test"
+tools.elixir = "1.19"
+tools.erlang = "28"
+
+[tasks."test:otp27"]
+description = "Run tests against elixir/otp 1.19/otp28"
+run = "mix test"
+env.MIX_ENV = "test"
+tools.elixir = "1.18"
+tools.erlang = "27"
