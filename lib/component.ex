@@ -192,8 +192,8 @@ defmodule Cartograph.Component do
         - user input: 4
         - resulting patch uri: `/users?page_no=4`
 
-    * other options are passed through to `Phoenix.LiveView.JS.push/2` as-is except for
-      `:value`, which is used internally by cartograph.
+    * `:loading` - passed through to `Phoenix.LiveView.JS.push/2` as-is.
+    * `:page_loading` - passed through to `Phoenix.LiveView.JS.push/2` as-is.
   """
   def cartograph_patch(opts \\ [])
 
@@ -205,7 +205,14 @@ defmodule Cartograph.Component do
       |> parse_query_opts()
       |> serialize_query_opts()
 
-    JS.push("cartograph_patch", value: %{"query_opts" => parsed_opts})
+    push_value = %{"query_opts" => parsed_opts}
+
+    phx_opts = filter_phoenix_push_opts(opts)
+    push_opts = Keyword.put(phx_opts, :value, push_value)
+
+    JS.push("cartograph_patch", push_opts)
+    # JS.push("cartograph_patch", page_loading: true)
+    # JS.push("cartograph_patch", value: push_value)
   end
 
   @doc """
@@ -227,8 +234,8 @@ defmodule Cartograph.Component do
         - user input: 4
         - resulting navigate uri: `https://localhost:4000/users?page_no=4`
 
-    * other options are passed through to `Phoenix.LiveView.JS.push/2` as-is except for
-      `:value`, which is used internally by cartograph.
+    * `:loading` - passed through to `Phoenix.LiveView.JS.push/2` as-is.
+    * `:page_loading` - passed through to `Phoenix.LiveView.JS.push/2` as-is.
   """
   def cartograph_navigate(uri, opts \\ [])
 
@@ -240,12 +247,21 @@ defmodule Cartograph.Component do
       |> parse_query_opts()
       |> serialize_query_opts()
 
-    JS.push("cartograph_navigate", value: %{"uri" => uri, "query_opts" => parsed_opts})
+    push_value = %{"uri" => uri, "query_opts" => parsed_opts}
+
+    phx_opts = filter_phoenix_push_opts(opts)
+    push_opts = Keyword.put(phx_opts, :value, push_value)
+
+    JS.push("cartograph_navigate", push_opts)
   end
 
   def cartograph_navigate(%URI{} = uri, opts) do
     query_opts = Keyword.get(opts, :query, [])
     cartograph_navigate(URI.to_string(uri), query_opts)
+  end
+
+  defp filter_phoenix_push_opts(opts) do
+    Keyword.filter(opts, &(elem(&1, 0) in [:loading, :page_loading]))
   end
 
   defp serialize_query_opts(parsed_opts) do
