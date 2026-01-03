@@ -11,7 +11,7 @@ Add `:cartograph` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:cartograph, "~> 0.1"}
+    {:cartograph, "~> 0.2"}
   ]
 end
 ```
