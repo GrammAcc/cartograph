@@ -203,15 +203,7 @@ defmodule Cartograph.Component do
     parsed_opts =
       query_opts
       |> parse_query_opts()
-      |> Enum.map(fn [op, comp] ->
-        [
-          op,
-          Map.new(comp, fn
-            [k, v] -> {k, v}
-            {k, v} -> {k, v}
-          end),
-        ]
-      end)
+      |> serialize_query_opts()
 
     JS.push("cartograph_patch", value: %{"query_opts" => parsed_opts})
   end
@@ -246,15 +238,7 @@ defmodule Cartograph.Component do
     parsed_opts =
       query_opts
       |> parse_query_opts()
-      |> Enum.map(fn [op, comp] ->
-        [
-          op,
-          Map.new(comp, fn
-            [k, v] -> {k, v}
-            {k, v} -> {k, v}
-          end),
-        ]
-      end)
+      |> serialize_query_opts()
 
     JS.push("cartograph_navigate", value: %{"uri" => uri, "query_opts" => parsed_opts})
   end
@@ -262,6 +246,34 @@ defmodule Cartograph.Component do
   def cartograph_navigate(%URI{} = uri, opts) do
     query_opts = Keyword.get(opts, :query, [])
     cartograph_navigate(URI.to_string(uri), query_opts)
+  end
+
+  defp serialize_query_opts(parsed_opts) do
+    Enum.map(parsed_opts, fn
+      [:remove, %{} = comp] ->
+        [
+          :remove,
+          Map.new(comp, fn
+            [k, v] -> {k, v}
+            {k, v} -> {k, v}
+          end),
+        ]
+
+      [:remove, [_ | _] = comp] ->
+        [:remove, comp]
+
+      [:remove, [] = comp] ->
+        [:remove, comp]
+
+      [op, comp] ->
+        [
+          op,
+          Map.new(comp, fn
+            [k, v] -> {k, v}
+            {k, v} -> {k, v}
+          end),
+        ]
+    end)
   end
 
   @doc """
