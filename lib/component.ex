@@ -358,12 +358,11 @@ defmodule Cartograph.Component do
     |> Enum.reduce(query_items, &parse_query_op/2)
     |> Enum.reverse()
     |> Enum.map(fn
-      [k, v] -> Enum.join([k, v], "=")
-      {k, v} -> Enum.join([k, v], "=")
+      [k, v] -> Enum.join([URI.encode_www_form(k), URI.encode_www_form(v)], "=")
+      {k, v} -> Enum.join([URI.encode_www_form(k), URI.encode_www_form(v)], "=")
     end)
     |> Enum.join("&")
     |> String.replace("phx_value", phx_value)
-    |> URI.encode(&URI.char_unescaped?/1)
   end
 
   defp parse_query_op([:add, instructions], query_items) when is_list(query_items) do

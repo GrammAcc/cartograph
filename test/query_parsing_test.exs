@@ -48,7 +48,7 @@ defmodule Test.Cartograph.QueryParsing do
     {":toggle array key bracket syntax - removed", [toggle: %{"foo[]" => "starting"}],
      "/test-path?foo[]=starting", "/test-path"},
     {":toggle array key bracket syntax - added", [toggle: %{"foo[]" => "starting"}],
-     "/test-path?foo[]=bar", "/test-path?foo[]=bar&foo[]=starting"},
+     "/test-path?foo[]=bar", "/test-path?foo%5B%5D=bar&foo%5B%5D=starting"},
     {":toggle param order",
      [toggle: %{foo: "bar"}, toggle: %{foo: "baz"}, toggle: %{foo: "bar"}, toggle: %{foo: "bar"}],
      "/test-path?foo=starting", "/test-path?foo=starting&foo=baz&foo=bar"},
@@ -67,6 +67,8 @@ defmodule Test.Cartograph.QueryParsing do
      "/test-path?foo=bar"},
     {"existing params preserve order", [remove: [:bar]],
      "/test-path?foo=first&bar=second&baz=third", "/test-path?foo=first&baz=third"},
+    {"literal plus sign is escaped", [set: %{foo: "bar+"}], "/test-path?foo=starting",
+     "/test-path?foo=bar%2B"},
   ]
 
   describe "query parsing" do
