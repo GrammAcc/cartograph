@@ -217,7 +217,7 @@ If we added another key e.g. `:current_role` to the `@cartograph_parser` `keys` 
 
 If the logic of our `handle_params/3` callback can be satisfied entirely with `:handler` functions, then we can further reduce the boilerplate by providing the `handle_params: true` option to `use Cartograph.LiveViewParams`:
 
-```
+```elixir
   use Phoenix.LiveView
 
   use Cartograph.LiveViewParams, handle_params: true
@@ -271,7 +271,7 @@ When `handle_params: true` is provided, the `Cartograph.LiveViewParams.__using__
 
 This works well for common query params such as pagination or dynamic filters when defining a "base" LiveView along with helper modules for the shared parsing functions. For example:
 
-```
+```elixir
 defmodule MyApp.BaseLiveView do
   use Phoenix.LiveView
   use Cartograph.LiveViewParams, handle_params: true
